@@ -36,7 +36,7 @@ fn main() {
 
     // Create the test wallet 
     //core_rpc.create_wallet("test", None, None, None, None).unwrap();
-    /*let args = [
+    let args = [
         Value::String(String::from("test")),
         Value::Bool(false),
         Value::Bool(false),
@@ -58,7 +58,7 @@ fn main() {
     let core_balance = core_rpc.get_balance(None, None).unwrap();
     
     // Show balance
-    println!("core balance: {:#?}", core_balance);*/
+    println!("core balance: {:#?}", core_balance);
 
     // Get receive and change descriptor
     let (receive_desc, change_desc) = get_descriptors();
