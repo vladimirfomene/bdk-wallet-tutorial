@@ -7,7 +7,7 @@ use bdk::bitcoincore_rpc::jsonrpc::serde_json::Value;
 use bdk::bitcoincore_rpc::{Auth as rpc_auth, Client, RpcApi};
 
 use bdk::blockchain::rpc::{Auth, RpcBlockchain, RpcConfig };
-use bdk::blockchain::{ConfigurableBlockchain, NoopProgress};
+use bdk::blockchain::{ConfigurableBlockchain, NoopProgress, Blockchain};
 
 use bdk::keys::bip39::{Mnemonic, Language, WordCount };
 use bdk::keys::{GeneratedKey, GeneratableKey, ExtendedKey, DerivableKey, DescriptorKey};
@@ -32,11 +32,10 @@ fn main() {
         "password".to_string()
     ); 
     let core_rpc = Client::new("http://127.0.0.1:18443/wallet/test", rpc_auth).unwrap();
-    //println!("{:#?}", core_rpc.get_blockchain_info().unwrap());
 
     // Create the test wallet 
-    //core_rpc.create_wallet("test", None, None, None, None).unwrap();
-    let args = [
+    core_rpc.create_wallet("test", None, None, None, None).unwrap();
+    /*let args = [
         Value::String(String::from("test")),
         Value::Bool(false),
         Value::Bool(false),
@@ -46,7 +45,7 @@ fn main() {
         Value::Bool(true),
         Value::Bool(false),
     ];
-    let _: Value = core_rpc.call("createwallet", &args).unwrap();
+    let _: Value = core_rpc.call("createwallet", &args).unwrap();*/
     
     // Get a new address
     let core_address = core_rpc.get_new_address(None, None).unwrap();
@@ -112,6 +111,54 @@ fn main() {
     let address = wallet.get_address(AddressIndex::New).unwrap().address;
 
     println!("bdk address: {:#?}", address);
+    println!("{:#?}", wallet);
+    // Fetch a fresh address to receive coins
+    let address = wallet.get_address(AddressIndex::New).unwrap().address;
+
+    // Send 10 BTC from Core to BDK
+    core_rpc.send_to_address(&address, Amount::from_btc(10.0).unwrap(), None, None, None, None, None, None).unwrap();
+
+    // Confirm transaction by generating some blocks
+    core_rpc.generate_to_address(1, &core_address).unwrap();
+
+    // Sync the BDK wallet
+    wallet.sync(&blockchain, SyncOptions::default()).unwrap();
+    
+    // Create a transaction builder
+    let mut tx_builder = wallet.build_tx();
+
+    // Set recipient of the transaction
+    tx_builder.set_recipients(vec!((core_address.script_pubkey(), 500000000)));
+
+    // Finalise the transaction and extract PSBT
+    let (mut psbt, _) = tx_builder.finish().unwrap();
+
+    // Set signing option
+    let signopt = SignOptions {
+        assume_height: None,
+        ..Default::default()
+    };
+
+    // Sign the above psbt with signing option
+    wallet.sign(&mut psbt, signopt).unwrap();
+
+    // Extract the final transaction
+    let tx = psbt.extract_tx();
+
+    // Broadcast the transaction
+    blockchain.broadcast(&tx).unwrap();
+
+    // Confirm transaction by generating some blocks
+    core_rpc.generate_to_address(1, &core_address).unwrap();
+
+    // Sync the BDK wallet
+    wallet.sync(&blockchain, SyncOptions::default()).unwrap();
+
+    // Fetch and display wallet balances
+    let core_balance = core_rpc.get_balance(None, None).unwrap();
+    let bdk_balance = Amount::from_sat(wallet.get_balance().unwrap());
+    println!("core wallet balance: {:#?}", core_balance);
+    println!("BDK wallet balance: {:#?}", bdk_balance);
 
    
 }
